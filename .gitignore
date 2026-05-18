@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.sqlite3
+db.sqlite3
+
+# Django
+.env
+.env.*
+media/
+staticfiles/
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Flutter / Dart
+foldaway_app/.dart_tool/
+foldaway_app/.packages
+foldaway_app/.flutter-plugins
+foldaway_app/.flutter-plugins-dependencies
+foldaway_app/build/
+foldaway_app/.pub-cache/
+foldaway_app/pubspec.lock
+
+# Flutter generated platform builds
+foldaway_app/android/.gradle/
+foldaway_app/ios/Pods/
+foldaway_app/ios/.symlinks/
+foldaway_app/ios/Flutter/Flutter.framework
+foldaway_app/ios/Flutter/Flutter.podspec
+foldaway_app/macos/Pods/
+foldaway_app/macos/Flutter/ephemeral/
+foldaway_app/linux/flutter/ephemeral/
+foldaway_app/windows/flutter/ephemeral/
+
+# Logs
+*.log
