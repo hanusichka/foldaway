@@ -25,9 +25,9 @@ class ListItem {
 
   factory ListItem.fromJson(Map<String, dynamic> json) {
     return ListItem(
-      id: json['id'],
-      listId: json['list'],
-      title: json['title'],
+      id: json['id'].toString(),
+      listId: json['list'].toString(),
+      title: json['title'] ?? '',
       description: json['description'] ?? '',
       address: json['address'] ?? '',
       mapSymbol: json['map_symbol'] ?? '',
