@@ -63,7 +63,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'foldaway.wsgi.application'
 
-# ✅ PostgreSQL замість SQLite
+# PostgreSQL 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',

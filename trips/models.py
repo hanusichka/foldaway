@@ -24,6 +24,7 @@ class List(models.Model):
     trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='lists')
     title = models.CharField(max_length=255)
     icon = models.CharField(max_length=30, default='📍')
+    cover_image_url = models.URLField(blank=True, null=True)
     position = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 

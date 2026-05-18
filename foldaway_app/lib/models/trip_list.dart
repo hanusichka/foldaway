@@ -3,6 +3,7 @@ class TripList {
   final String trip;
   final String title;
   final String icon;
+  final String? coverImageUrl;
   final int position;
 
   TripList({
@@ -10,6 +11,7 @@ class TripList {
     required this.trip,
     required this.title,
     required this.icon,
+    required this.coverImageUrl,
     required this.position,
   });
 
@@ -19,6 +21,7 @@ class TripList {
       trip: json['trip'].toString(),
       title: json['title'] ?? '',
       icon: json['icon'] ?? '📍',
+      coverImageUrl: json['cover_image_url'],
       position: json['position'] ?? 0,
     );
   }

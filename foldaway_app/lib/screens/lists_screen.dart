@@ -48,35 +48,43 @@ class _ListsScreenState extends State<ListsScreen> {
   }
 
   Future<void> _loadLists() async {
-  try {
-    final lists = await _apiService.getLists(widget.tripId);
+    try {
+      final lists = await _apiService.getLists(widget.tripId);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _lists = lists;
-      _isLoading = false;
-    });
-  } catch (e) {
-    if (!mounted) return;
+      setState(() {
+        _lists = lists;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
 
-    setState(() {
-      _isLoading = false;
-    });
+      setState(() {
+        _isLoading = false;
+      });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Помилка завантаження списків: $e'),
-      ),
-    );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Помилка завантаження списків: $e'),
+        ),
+      );
 
-    debugPrint('LISTS LOAD ERROR: $e');
+      debugPrint('LISTS LOAD ERROR: $e');
+    }
   }
-}
 
   Future<void> _createList() async {
-    final titleController = TextEditingController();
-    String selectedIcon = '🍽️';
+    await _showListDialog();
+  }
+
+  Future<void> _showListDialog({TripList? existingList}) async {
+    final titleController = TextEditingController(
+      text: existingList?.title ?? '',
+    );
+
+    String selectedIcon = existingList?.icon ?? '🍽️';
+    final bool isEditing = existingList != null;
 
     await showDialog(
       context: context,
@@ -84,7 +92,9 @@ class _ListsScreenState extends State<ListsScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('НОВИЙ СПИСОК'),
+              title: Text(
+                isEditing ? 'РЕДАГУВАТИ СПИСОК' : 'НОВИЙ СПИСОК',
+              ),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -138,7 +148,10 @@ class _ListsScreenState extends State<ListsScreen> {
                             ),
                             child: Text(
                               icon,
-                              style: const TextStyle(fontSize: 23),
+                              style: const TextStyle(
+                                fontSize: 23,
+                                fontFamily: 'Apple Color Emoji',
+                              ),
                             ),
                           ),
                         );
@@ -156,20 +169,49 @@ class _ListsScreenState extends State<ListsScreen> {
                   onPressed: () async {
                     final title = titleController.text.trim();
 
-                    if (title.isEmpty) return;
+                    if (title.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Введи назву списку'),
+                        ),
+                      );
+                      return;
+                    }
 
-                    final list = await _apiService.createList(
-                      widget.tripId,
-                      title,
-                      selectedIcon,
-                    );
+                    TripList? result;
 
-                    if (list != null && mounted) {
+                    if (isEditing) {
+                      result = await _apiService.updateList(
+                        existingList.id,
+                        title,
+                        selectedIcon,
+                      );
+                    } else {
+                      result = await _apiService.createList(
+                        widget.tripId,
+                        title,
+                        selectedIcon,
+                      );
+                    }
+
+                    if (!mounted) return;
+
+                    if (result != null) {
                       Navigator.pop(dialogContext);
-                      _loadLists();
+                      await _loadLists();
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            isEditing
+                                ? 'Не вдалося оновити список'
+                                : 'Не вдалося створити список',
+                          ),
+                        ),
+                      );
                     }
                   },
-                  child: const Text('СТВОРИТИ'),
+                  child: Text(isEditing ? 'ЗБЕРЕГТИ' : 'СТВОРИТИ'),
                 ),
               ],
             );
@@ -182,8 +224,19 @@ class _ListsScreenState extends State<ListsScreen> {
   }
 
   Future<void> _deleteList(String id) async {
-    await _apiService.deleteList(id);
-    _loadLists();
+    final success = await _apiService.deleteList(id);
+
+    if (!mounted) return;
+
+    if (success) {
+      await _loadLists();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Не вдалося видалити список'),
+        ),
+      );
+    }
   }
 
   @override
@@ -234,7 +287,9 @@ class _ListsScreenState extends State<ListsScreen> {
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
                         color: FoldawayColors.white,
-                        border: Border.all(color: FoldawayColors.line),
+                        border: Border.all(
+                          color: FoldawayColors.line,
+                        ),
                       ),
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(
@@ -243,7 +298,10 @@ class _ListsScreenState extends State<ListsScreen> {
                         ),
                         leading: Text(
                           list.icon,
-                          style: const TextStyle(fontSize: 30),
+                          style: const TextStyle(
+                            fontSize: 30,
+                            fontFamily: 'Apple Color Emoji',
+                          ),
                         ),
                         title: Text(
                           list.title.toUpperCase(),
@@ -256,9 +314,22 @@ class _ListsScreenState extends State<ListsScreen> {
                                     color: FoldawayColors.muted,
                                   ),
                         ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () => _deleteList(list.id.toString()),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Редагувати',
+                              icon: const Icon(Icons.edit_outlined),
+                              onPressed: () {
+                                _showListDialog(existingList: list);
+                              },
+                            ),
+                            IconButton(
+                              tooltip: 'Видалити',
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () => _deleteList(list.id),
+                            ),
+                          ],
                         ),
                         onTap: () => context.go(
                           '/trips/${widget.tripId}/lists/${list.id}',

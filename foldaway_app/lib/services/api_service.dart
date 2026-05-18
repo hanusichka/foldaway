@@ -1,11 +1,12 @@
 import 'dart:convert';
+
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/trip.dart';
 import '../models/trip_list.dart';
 import '../models/list_item.dart';
-//import 'dart:convert' show utf8;
-import 'package:flutter/material.dart';
 
 class ApiService {
   static const String baseUrl = 'http://127.0.0.1:8000/api';
@@ -26,11 +27,12 @@ class ApiService {
   }
 
   Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
-  };
+        'Content-Type': 'application/json',
+      };
 
   Future<Map<String, String>> get _authHeaders async {
     final token = await getToken();
+
     return {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
@@ -42,17 +44,26 @@ class ApiService {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/login/'),
       headers: _headers,
-      body: jsonEncode({'username': username, 'password': password}),
+      body: jsonEncode({
+        'username': username,
+        'password': password,
+      }),
     );
+
     if (response.statusCode == 200) {
-      final data =  jsonDecode(utf8.decode(response.bodyBytes));
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
       await saveToken(data['access']);
       return true;
     }
+
     return false;
   }
 
-  Future<bool> register(String username, String email, String password) async {
+  Future<bool> register(
+    String username,
+    String email,
+    String password,
+  ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/register/'),
       headers: _headers,
@@ -62,31 +73,54 @@ class ApiService {
         'password': password,
       }),
     );
+
     return response.statusCode == 201;
   }
 
   // Подорожі
   Future<List<Trip>> getTrips() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/trips/'),
-      headers: await _authHeaders,
-    );
+    final response = await http
+        .get(
+          Uri.parse('$baseUrl/trips/'),
+          headers: await _authHeaders,
+        )
+        .timeout(const Duration(seconds: 10));
+
+    debugPrint('GET TRIPS STATUS: ${response.statusCode}');
+    debugPrint('GET TRIPS BODY: ${utf8.decode(response.bodyBytes)}');
+
     if (response.statusCode == 200) {
       final List data = jsonDecode(utf8.decode(response.bodyBytes));
       return data.map((json) => Trip.fromJson(json)).toList();
     }
-    return [];
+
+    throw Exception(
+      'Failed to load trips: ${response.statusCode} ${utf8.decode(response.bodyBytes)}',
+    );
   }
 
-  Future<Trip?> createTrip(String title, String destination) async {
+  Future<Trip?> createTrip(
+    String title,
+    String destination,
+    String? coverImageUrl,
+  ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/trips/'),
       headers: await _authHeaders,
-      body: jsonEncode({'title': title, 'destination': destination}),
+      body: jsonEncode({
+        'title': title,
+        'destination': destination,
+        'cover_image_url': coverImageUrl,
+      }),
     );
+
+    debugPrint('CREATE TRIP STATUS: ${response.statusCode}');
+    debugPrint('CREATE TRIP BODY: ${utf8.decode(response.bodyBytes)}');
+
     if (response.statusCode == 201) {
       return Trip.fromJson(jsonDecode(utf8.decode(response.bodyBytes)));
     }
+
     return null;
   }
 
@@ -95,9 +129,37 @@ class ApiService {
       Uri.parse('$baseUrl/trips/$id/'),
       headers: await _authHeaders,
     );
+
     return response.statusCode == 204;
   }
-  // Листи
+
+  Future<Trip?> updateTrip(
+    String tripId,
+    String title,
+    String destination,
+    String? coverImageUrl,
+  ) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/trips/$tripId/'),
+      headers: await _authHeaders,
+      body: jsonEncode({
+        'title': title,
+        'destination': destination,
+        'cover_image_url': coverImageUrl,
+      }),
+    );
+
+    debugPrint('UPDATE TRIP STATUS: ${response.statusCode}');
+    debugPrint('UPDATE TRIP BODY: ${utf8.decode(response.bodyBytes)}');
+
+    if (response.statusCode == 200) {
+      return Trip.fromJson(jsonDecode(utf8.decode(response.bodyBytes)));
+    }
+
+    return null;
+  }
+
+  // Списки
   Future<List<TripList>> getLists(String tripId) async {
     try {
       final token = await getToken();
@@ -129,15 +191,53 @@ class ApiService {
     }
   }
 
-  Future<TripList?> createList(String tripId, String title, String icon) async {
+  Future<TripList?> createList(
+    String tripId,
+    String title,
+    String icon,
+  ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/lists/'),
       headers: await _authHeaders,
-      body: jsonEncode({'trip': tripId, 'title': title, 'icon': icon, 'position': 0}),
+      body: jsonEncode({
+        'trip': tripId,
+        'title': title,
+        'icon': icon,
+        'position': 0,
+      }),
     );
+
+    debugPrint('CREATE LIST STATUS: ${response.statusCode}');
+    debugPrint('CREATE LIST BODY: ${utf8.decode(response.bodyBytes)}');
+
     if (response.statusCode == 201) {
       return TripList.fromJson(jsonDecode(utf8.decode(response.bodyBytes)));
     }
+
+    return null;
+  }
+
+  Future<TripList?> updateList(
+    String listId,
+    String title,
+    String icon,
+  ) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/lists/$listId/'),
+      headers: await _authHeaders,
+      body: jsonEncode({
+        'title': title,
+        'icon': icon,
+      }),
+    );
+
+    debugPrint('UPDATE LIST STATUS: ${response.statusCode}');
+    debugPrint('UPDATE LIST BODY: ${utf8.decode(response.bodyBytes)}');
+
+    if (response.statusCode == 200) {
+      return TripList.fromJson(jsonDecode(utf8.decode(response.bodyBytes)));
+    }
+
     return null;
   }
 
@@ -146,22 +246,37 @@ class ApiService {
       Uri.parse('$baseUrl/lists/$id/'),
       headers: await _authHeaders,
     );
+
     return response.statusCode == 204;
   }
-  // Пункти листа
+
+  // Пункти списку
   Future<List<ListItem>> getItems(String listId) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/items/?list=$listId'),
-      headers: await _authHeaders,
-    );
+    final response = await http
+        .get(
+          Uri.parse('$baseUrl/items/?list=$listId'),
+          headers: await _authHeaders,
+        )
+        .timeout(const Duration(seconds: 10));
+
+    debugPrint('GET ITEMS STATUS: ${response.statusCode}');
+    debugPrint('GET ITEMS BODY: ${utf8.decode(response.bodyBytes)}');
+
     if (response.statusCode == 200) {
       final List data = jsonDecode(utf8.decode(response.bodyBytes));
       return data.map((json) => ListItem.fromJson(json)).toList();
     }
-    return [];
+
+    throw Exception(
+      'Failed to load items: ${response.statusCode} ${utf8.decode(response.bodyBytes)}',
+    );
   }
 
-  Future<ListItem?> createItem(String listId, String title, String description) async {
+  Future<ListItem?> createItem(
+    String listId,
+    String title,
+    String description,
+  ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/items/'),
       headers: await _authHeaders,
@@ -172,9 +287,11 @@ class ApiService {
         'position': 0,
       }),
     );
+
     if (response.statusCode == 201) {
       return ListItem.fromJson(jsonDecode(utf8.decode(response.bodyBytes)));
     }
+
     return null;
   }
 
@@ -182,8 +299,11 @@ class ApiService {
     final response = await http.patch(
       Uri.parse('$baseUrl/items/$id/'),
       headers: await _authHeaders,
-      body: jsonEncode({'is_done': isDone}),
+      body: jsonEncode({
+        'is_done': isDone,
+      }),
     );
+
     return response.statusCode == 200;
   }
 
@@ -192,6 +312,7 @@ class ApiService {
       Uri.parse('$baseUrl/items/$id/'),
       headers: await _authHeaders,
     );
+
     return response.statusCode == 204;
   }
 }

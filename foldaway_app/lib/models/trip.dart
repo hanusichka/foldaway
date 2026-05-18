@@ -17,8 +17,8 @@ class Trip {
 
   factory Trip.fromJson(Map<String, dynamic> json) {
     return Trip(
-      id: json['id'],
-      title: json['title'],
+      id: json['id'].toString(),
+      title: json['title'] ?? '',
       destination: json['destination'] ?? '',
       startDate: json['start_date'],
       endDate: json['end_date'],
@@ -32,6 +32,7 @@ class Trip {
       'destination': destination,
       'start_date': startDate,
       'end_date': endDate,
+      'cover_image_url': coverImageUrl,
     };
   }
 }
