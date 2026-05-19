@@ -272,33 +272,87 @@ class ApiService {
     );
   }
 
-  Future<ListItem?> createItem(
-  String listId,
-  String title,
-  String description,
-  String externalLink,
-) async {
-  final response = await http.post(
-    Uri.parse('$baseUrl/items/'),
-    headers: await _authHeaders,
-    body: jsonEncode({
-      'list': listId,
-      'title': title,
-      'description': description,
-      'external_link': externalLink,
-      'position': 0,
-    }),
-  );
+  Future<List<ListItem>> getItemsByTrip(String tripId) async {
+    final response = await http
+        .get(
+          Uri.parse('$baseUrl/items/?trip=$tripId'),
+          headers: await _authHeaders,
+        )
+        .timeout(const Duration(seconds: 10));
 
-  debugPrint('CREATE ITEM STATUS: ${response.statusCode}');
-  debugPrint('CREATE ITEM BODY: ${utf8.decode(response.bodyBytes)}');
+    debugPrint('GET ITEMS BY TRIP STATUS: ${response.statusCode}');
+    debugPrint('GET ITEMS BY TRIP BODY: ${utf8.decode(response.bodyBytes)}');
 
-  if (response.statusCode == 201) {
-    return ListItem.fromJson(jsonDecode(utf8.decode(response.bodyBytes)));
+    if (response.statusCode == 200) {
+      final List data = jsonDecode(utf8.decode(response.bodyBytes));
+      return data.map((json) => ListItem.fromJson(json)).toList();
+    }
+
+    throw Exception(
+      'Failed to load trip items: ${response.statusCode} ${utf8.decode(response.bodyBytes)}',
+    );
   }
 
-  return null;
-}
+  Future<ListItem?> createItem(
+    String listId,
+    String title,
+    String description,
+    String externalLink,
+    double? latitude,
+    double? longitude,
+  ) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/items/'),
+      headers: await _authHeaders,
+      body: jsonEncode({
+        'list': listId,
+        'title': title,
+        'description': description,
+        'external_link': externalLink,
+        'position': 0,
+        'latitude': latitude,
+        'longitude': longitude,
+      }),
+    );
+
+    debugPrint('CREATE ITEM STATUS: ${response.statusCode}');
+    debugPrint('CREATE ITEM BODY: ${utf8.decode(response.bodyBytes)}');
+
+    if (response.statusCode == 201) {
+      return ListItem.fromJson(jsonDecode(utf8.decode(response.bodyBytes)));
+    }
+
+    return null;
+  }
+  Future<ListItem?> updateItem(
+    String itemId,
+    String title,
+    String description,
+    String externalLink,
+    double? latitude,
+    double? longitude,
+  ) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/items/$itemId/'),
+      headers: await _authHeaders,
+      body: jsonEncode({
+        'title': title,
+        'description': description,
+        'external_link': externalLink,
+        'latitude': latitude,
+        'longitude': longitude,
+      }),
+    );
+
+    debugPrint('UPDATE ITEM STATUS: ${response.statusCode}');
+    debugPrint('UPDATE ITEM BODY: ${utf8.decode(response.bodyBytes)}');
+
+    if (response.statusCode == 200) {
+      return ListItem.fromJson(jsonDecode(utf8.decode(response.bodyBytes)));
+    }
+
+    return null;
+  }
 
   Future<bool> toggleItem(String id, bool isDone) async {
     final response = await http.patch(

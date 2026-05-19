@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../services/api_service.dart';
 import '../models/trip_list.dart';
 import '../theme/app_theme.dart';
+import '../widgets/category_icon.dart';
 
 class ListsScreen extends StatefulWidget {
   final String tripId;
@@ -146,12 +147,10 @@ class _ListsScreenState extends State<ListsScreen> {
                                     : FoldawayColors.line,
                               ),
                             ),
-                            child: Text(
-                              icon,
-                              style: const TextStyle(
-                                fontSize: 23,
-                                fontFamily: 'Apple Color Emoji',
-                              ),
+                            child: CategoryIcon(
+                              icon: icon,
+                              size: 30,
+                              //color: isSelected ? FoldawayColors.white : FoldawayColors.ink,
                             ),
                           ),
                         );
@@ -296,11 +295,13 @@ class _ListsScreenState extends State<ListsScreen> {
                           horizontal: 16,
                           vertical: 10,
                         ),
-                        leading: Text(
-                          list.icon,
-                          style: const TextStyle(
-                            fontSize: 30,
-                            fontFamily: 'Apple Color Emoji',
+                        leading: SizedBox(
+                          width: 44,
+                          child: Center(
+                            child: CategoryIcon(
+                              icon: list.icon,
+                              size: 38,
+                            ),
                           ),
                         ),
                         title: Text(
@@ -339,9 +340,29 @@ class _ListsScreenState extends State<ListsScreen> {
                     );
                   },
                 ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _createList,
-        child: const Icon(Icons.add),
+      floatingActionButton: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton(
+            heroTag: 'mapButton',
+            tooltip: 'Карта подорожі',
+            onPressed: () {
+              context.go(
+                '/trips/${widget.tripId}/map?title=${Uri.encodeComponent(widget.tripTitle)}',
+              );
+            },
+            child: const Icon(Icons.map_outlined),
+          ),
+
+          const SizedBox(width: 12),
+
+          FloatingActionButton(
+            heroTag: 'addListButton',
+            tooltip: 'Додати список',
+            onPressed: _createList,
+            child: const Icon(Icons.add),
+          ),
+        ],
       ),
     );
   }

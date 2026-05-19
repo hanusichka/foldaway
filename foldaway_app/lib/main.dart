@@ -7,6 +7,7 @@ import 'screens/trips_screen.dart';
 import 'screens/lists_screen.dart';
 import 'screens/items_screen.dart';
 import 'theme/app_theme.dart';
+import 'screens/trip_map_screen.dart';
 
 void main() {
   runApp(const FoldawayApp());
@@ -31,6 +32,12 @@ final _router = GoRouter(
       builder: (context, state) => ListsScreen(
         tripId: state.pathParameters['tripId']!,
         tripTitle: state.uri.queryParameters['title'] ?? 'Подорож',
+      ),
+    ),
+    GoRoute(path: '/trips/:tripId/map',
+      builder: (context, state) => TripMapScreen(
+        tripId: state.pathParameters['tripId']!,
+        tripTitle: state.uri.queryParameters['title'] ?? 'Карта подорожі',
       ),
     ),
     GoRoute(
