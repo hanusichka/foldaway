@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import TripViewSet, ListViewSet, ListItemViewSet
+from .views import TripViewSet, ListViewSet, ListItemViewSet, GooglePlacesSuggestionsView
+
 
 router = DefaultRouter()
 router.register(r'trips', TripViewSet, basename='trip')
@@ -9,4 +10,9 @@ router.register(r'items', ListItemViewSet, basename='item')
 
 urlpatterns = [
     path('', include(router.urls)),
+    path(
+        "places/suggestions/",
+        GooglePlacesSuggestionsView.as_view(),
+        name="places-suggestions",
+    ),
 ]
