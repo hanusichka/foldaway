@@ -9,11 +9,15 @@ import '../theme/app_theme.dart';
 class ItemsScreen extends StatefulWidget {
   final String listId;
   final String listTitle;
+  final String tripId;
+  final String tripTitle;
 
   const ItemsScreen({
     super.key,
     required this.listId,
     required this.listTitle,
+    required this.tripId,
+    required this.tripTitle,
   });
 
   @override
@@ -320,7 +324,7 @@ class _ItemsScreenState extends State<ItemsScreen> {
         title: Text(widget.listTitle.toUpperCase()),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/trips'),
+          onPressed: () => context.go('/trips/${widget.tripId}?title=${Uri.encodeComponent(widget.tripTitle)}'),
         ),
         bottom: total > 0
             ? PreferredSize(

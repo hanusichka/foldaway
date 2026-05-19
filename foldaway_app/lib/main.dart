@@ -43,8 +43,10 @@ final _router = GoRouter(
     GoRoute(
       path: '/trips/:tripId/lists/:listId',
       builder: (context, state) => ItemsScreen(
+        tripId: state.pathParameters['tripId']!,
         listId: state.pathParameters['listId']!,
-        listTitle: state.extra as String? ?? 'Список',
+        listTitle: state.uri.queryParameters['listTitle'] ?? 'Список',
+        tripTitle: state.uri.queryParameters['tripTitle'] ?? 'Подорож',
       ),
     ),
   ],
