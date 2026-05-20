@@ -6,10 +6,16 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
-from .places_service import search_places_for_list
+from .places_service import (
+    search_places_for_list,
+    resolve_place_id_from_text,
+    is_similar_place_title,
+)
 
 from .models import Trip, List, ListItem
 from .serializers import TripSerializer, ListSerializer, ListItemSerializer
+from .ai_recommendation_service import choose_best_places_with_ai
+#from .ai_recommendation_service import choose_best_place_with_ai
 
 
 def extract_coordinates_from_google_maps_url(url):
@@ -218,6 +224,47 @@ class ListItemViewSet(viewsets.ModelViewSet):
             longitude=longitude,
         )
 
+def filter_existing_places_from_candidates(trip, trip_list, candidates):
+    existing_items = ListItem.objects.filter(list=trip_list)
+
+    destination = trip.destination or trip.title
+
+    existing_place_ids = set()
+    existing_titles = []
+
+    for existing_item in existing_items:
+        if existing_item.title:
+            existing_titles.append(existing_item.title)
+
+            resolved_place_id = resolve_place_id_from_text(
+                title=existing_item.title,
+                destination=destination,
+            )
+
+            if resolved_place_id:
+                existing_place_ids.add(resolved_place_id)
+
+    filtered_candidates = []
+
+    for candidate in candidates:
+        candidate_place_id = candidate.get("place_id")
+        candidate_title = candidate.get("title", "")
+
+        if candidate_place_id and candidate_place_id in existing_place_ids:
+            continue
+
+        is_duplicate_by_title = any(
+            is_similar_place_title(candidate_title, existing_title)
+            for existing_title in existing_titles
+        )
+
+        if is_duplicate_by_title:
+            continue
+
+        filtered_candidates.append(candidate)
+
+    return filtered_candidates
+
 class GooglePlacesSuggestionsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -242,9 +289,71 @@ class GooglePlacesSuggestionsView(APIView):
             )
 
         try:
-            result = search_places_for_list(
+            places_result = search_places_for_list(
                 trip=trip_list.trip,
                 trip_list=trip_list,
+                max_results=8,
+            )
+        except ValueError as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        items = places_result["items"]
+
+        items = filter_existing_places_from_candidates(
+            trip=trip_list.trip,
+            trip_list=trip_list,
+            candidates=items,
+        )
+
+        existing_items = ListItem.objects.filter(list=trip_list)
+
+        existing_titles = {
+            item.title.strip().lower()
+            for item in existing_items
+            if item.title
+        }
+
+        existing_links = {
+            item.external_link.strip()
+            for item in existing_items
+            if item.external_link
+        }
+
+        filtered_items = []
+
+        for item in items:
+            title = item.get("title", "").strip().lower()
+            external_link = item.get("external_link", "").strip()
+
+            if title in existing_titles:
+                continue
+
+            if external_link and external_link in existing_links:
+                continue
+
+            filtered_items.append(item)
+
+        items = filtered_items
+
+        if not items:
+            return Response(
+                {
+                    "detail": "No new places found. All good candidates may already be in this list.",
+                    "query": places_result["query"],
+                    "items": [],
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            ai_result = choose_best_places_with_ai(
+                trip=trip_list.trip,
+                trip_list=trip_list,
+                query=places_result["query"],
+                items=items,
             )
         except ValueError as e:
             return Response(
@@ -263,8 +372,10 @@ class GooglePlacesSuggestionsView(APIView):
                     "id": trip_list.id,
                     "title": trip_list.title,
                 },
-                "query": result["query"],
-                "items": result["items"],
+                "query": places_result["query"],
+                "items": ai_result["items"],
+                "recommendations_count": ai_result["count"],
+                "candidates_count": len(items),
             },
             status=status.HTTP_200_OK,
         )

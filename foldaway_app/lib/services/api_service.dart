@@ -374,4 +374,33 @@ class ApiService {
 
     return response.statusCode == 204;
   }
+
+  Future<List<Map<String, dynamic>>> getPlaceRecommendations(
+  String listId,
+) async {
+  final response = await http.post(
+    Uri.parse('$baseUrl/places/suggestions/'),
+    headers: await _authHeaders,
+    body: jsonEncode({
+      'list_id': listId,
+    }),
+  );
+
+  debugPrint('PLACE RECOMMENDATIONS STATUS: ${response.statusCode}');
+  debugPrint('PLACE RECOMMENDATIONS BODY: ${utf8.decode(response.bodyBytes)}');
+
+  if (response.statusCode == 200) {
+    final data = jsonDecode(utf8.decode(response.bodyBytes));
+    final List items = data['items'] ?? [];
+
+    return items.map((item) {
+      return Map<String, dynamic>.from(item);
+    }).toList();
+  }
+
+  throw Exception(
+    'Failed to get place recommendations: '
+    '${response.statusCode} ${utf8.decode(response.bodyBytes)}',
+  );
+}
 }

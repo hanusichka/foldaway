@@ -40,11 +40,15 @@ class ListItem {
       externalLink: json['external_link'] ?? '',
       isDone: json['is_done'] ?? false,
       position: json['position'] ?? 0,
-      latitude: _toDoubleOrNull(json['latitude']),
-      longitude: _toDoubleOrNull(json['longitude']),
-    );
+      latitude: json['latitude'] == null
+        ? null
+        : double.tryParse(json['latitude'].toString()),
+    longitude: json['longitude'] == null
+        ? null
+        : double.tryParse(json['longitude'].toString()),
+        );
   }
-  
+
   static double? _toDoubleOrNull(dynamic value) {
     if (value == null) return null;
 

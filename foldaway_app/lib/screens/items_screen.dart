@@ -28,7 +28,11 @@ class _ItemsScreenState extends State<ItemsScreen> {
   final _apiService = ApiService();
 
   List<ListItem> _items = [];
+  List<Map<String, dynamic>> _placeRecommendations = [];
+
   bool _isLoading = true;
+  bool _isLoadingRecommendations = false;
+  final Set<String> _addingRecommendationTitles = {};
 
   @override
   void initState() {
@@ -63,6 +67,452 @@ class _ItemsScreenState extends State<ItemsScreen> {
     }
   }
 
+  Future<void> _loadPlaceRecommendations() async {
+    setState(() {
+      _isLoadingRecommendations = true;
+    });
+
+    try {
+      final recommendations = await _apiService.getPlaceRecommendations(
+        widget.listId,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _placeRecommendations = recommendations;
+      });
+
+      _showRecommendationsSheet();
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Не вдалося отримати рекомендації: $e'),
+        ),
+      );
+
+      debugPrint('PLACE RECOMMENDATIONS ERROR: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingRecommendations = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _addRecommendation(Map<String, dynamic> recommendation) async {
+    final title = recommendation['title']?.toString().trim() ?? '';
+    final description = _buildRecommendationDescription(recommendation);
+    final externalLink =
+        recommendation['external_link']?.toString().trim() ?? '';
+
+    final latitude = _toDouble(recommendation['latitude']);
+    final longitude = _toDouble(recommendation['longitude']);
+
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('У рекомендації немає назви'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _addingRecommendationTitles.add(title);
+    });
+
+    try {
+      final createdItem = await _apiService.createItem(
+        widget.listId,
+        title,
+        description,
+        externalLink,
+        latitude,
+        longitude,
+      );
+
+      if (!mounted) return;
+
+      if (createdItem != null) {
+        setState(() {
+          _placeRecommendations.removeWhere(
+            (item) => item['title']?.toString().trim() == title,
+          );
+        });
+
+        await _loadItems();
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Додано: $title'),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Не вдалося додати рекомендацію'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Помилка додавання: $e'),
+        ),
+      );
+
+      debugPrint('ADD RECOMMENDATION ERROR: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _addingRecommendationTitles.remove(title);
+        });
+      }
+    }
+  }
+
+  String _buildRecommendationDescription(Map<String, dynamic> recommendation) {
+    final aiDescription =
+        recommendation['ai_description']?.toString().trim() ?? '';
+    final reason = recommendation['reason']?.toString().trim() ?? '';
+    final originalDescription =
+        recommendation['description']?.toString().trim() ?? '';
+
+    final parts = <String>[];
+
+    if (aiDescription.isNotEmpty) {
+      parts.add(aiDescription);
+    }
+
+    if (originalDescription.isNotEmpty) {
+      parts.add(originalDescription);
+    }
+
+    if (reason.isNotEmpty) {
+      parts.add('AI: $reason');
+    }
+
+    return parts.join('\n\n');
+  }
+
+  double? _toDouble(dynamic value) {
+    if (value == null) return null;
+
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+
+    return double.tryParse(value.toString());
+  }
+
+  void _showRecommendationsSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: FoldawayColors.paper,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(28),
+        ),
+      ),
+      builder: (sheetContext) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.78,
+          minChildSize: 0.42,
+          maxChildSize: 0.94,
+          builder: (context, scrollController) {
+            return StatefulBuilder(
+              builder: (context, setSheetState) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+                  child: ListView(
+                    controller: scrollController,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 44,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: FoldawayColors.line,
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 18),
+
+                      Row(
+                        children: [
+                          const Icon(Icons.auto_awesome),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'AI RECOMMENDATIONS',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineLarge
+                                  ?.copyWith(
+                                    fontSize: 24,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      Text(
+                        'Ось кілька місць, підібраних для списку “${widget.listTitle}” у подорожі “${widget.tripTitle}”. Додай тільки ті, які тобі підходять.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: FoldawayColors.muted,
+                            ),
+                      ),
+
+                      const SizedBox(height: 18),
+
+                      if (_placeRecommendations.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: FoldawayColors.white,
+                            border: Border.all(color: FoldawayColors.line),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            'Нових рекомендацій немає. Можливо, найкращі місця вже додані в список.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        )
+                      else
+                        ..._placeRecommendations.map((recommendation) {
+                          final title =
+                              recommendation['title']?.toString().trim() ?? '';
+                          final aiDescription = recommendation['ai_description']
+                                  ?.toString()
+                                  .trim() ??
+                              '';
+                          final reason =
+                              recommendation['reason']?.toString().trim() ?? '';
+                          final description = recommendation['description']
+                                  ?.toString()
+                                  .trim() ??
+                              '';
+                          final externalLink = recommendation['external_link']
+                                  ?.toString()
+                                  .trim() ??
+                              '';
+                          final mapSymbol =
+                              recommendation['map_symbol']?.toString() ?? '📍';
+                          final rating = recommendation['rating'];
+                          final ratingCount = recommendation['rating_count'];
+                          final isAdding =
+                              _addingRecommendationTitles.contains(title);
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 14),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: FoldawayColors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: FoldawayColors.line,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      mapSymbol,
+                                      style: const TextStyle(fontSize: 22),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        title.toUpperCase(),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleLarge
+                                            ?.copyWith(
+                                              fontSize: 16,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                if (aiDescription.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    aiDescription,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: FoldawayColors.ink,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                ],
+
+                                if (description.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    description,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: FoldawayColors.muted,
+                                        ),
+                                  ),
+                                ],
+
+                                if (rating != null || ratingCount != null) ...[
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.star,
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        [
+                                          if (rating != null)
+                                            rating.toString(),
+                                          if (ratingCount != null)
+                                            '$ratingCount відгуків',
+                                        ].join(' · '),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              color: FoldawayColors.muted,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+
+                                if (reason.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: FoldawayColors.paper,
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: FoldawayColors.line,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      reason,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: FoldawayColors.muted,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+
+                                if (externalLink.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  InkWell(
+                                    onTap: () => _openMap(externalLink),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.map_outlined,
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            'Відкрити в Google Maps',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.copyWith(
+                                                  decoration:
+                                                      TextDecoration.underline,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+
+                                const SizedBox(height: 14),
+
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: externalLink.isEmpty
+                                            ? null
+                                            : () => _openMap(externalLink),
+                                        icon: const Icon(Icons.map_outlined),
+                                        label: const Text('КАРТА'),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: isAdding
+                                            ? null
+                                            : () async {
+                                                await _addRecommendation(
+                                                  recommendation,
+                                                );
+                                                setSheetState(() {});
+                                              },
+                                        icon: isAdding
+                                            ? const SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                ),
+                                              )
+                                            : const Icon(Icons.add),
+                                        label: Text(
+                                          isAdding ? 'ДОДАЮ...' : 'ДОДАТИ',
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _openMap(String url) async {
     final uri = Uri.tryParse(url);
 
@@ -94,7 +544,6 @@ class _ItemsScreenState extends State<ItemsScreen> {
 
     if (trimmedUrl.isEmpty) return null;
 
-    // Example: https://www.google.com/maps/place/.../@48.8584,2.2945,17z
     final atPattern = RegExp(r'@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)');
     final atMatch = atPattern.firstMatch(trimmedUrl);
 
@@ -105,7 +554,6 @@ class _ItemsScreenState extends State<ItemsScreen> {
       };
     }
 
-    // Example: ...!3d48.8584!4d2.2945
     final placePattern = RegExp(r'!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)');
     final placeMatch = placePattern.firstMatch(trimmedUrl);
 
@@ -116,7 +564,6 @@ class _ItemsScreenState extends State<ItemsScreen> {
       };
     }
 
-    // Example: ...?query=48.8584,2.2945
     final queryPattern = RegExp(r'query=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)');
     final queryMatch = queryPattern.firstMatch(trimmedUrl);
 
@@ -127,7 +574,6 @@ class _ItemsScreenState extends State<ItemsScreen> {
       };
     }
 
-    // Example: ...?q=48.8584,2.2945
     final qPattern = RegExp(r'[?&]q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)');
     final qMatch = qPattern.firstMatch(trimmedUrl);
 
@@ -324,8 +770,25 @@ class _ItemsScreenState extends State<ItemsScreen> {
         title: Text(widget.listTitle.toUpperCase()),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/trips/${widget.tripId}?title=${Uri.encodeComponent(widget.tripTitle)}'),
+          onPressed: () => context.go(
+            '/trips/${widget.tripId}?title=${Uri.encodeComponent(widget.tripTitle)}',
+          ),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'AI-рекомендації',
+            onPressed: _isLoadingRecommendations
+                ? null
+                : _loadPlaceRecommendations,
+            icon: _isLoadingRecommendations
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.auto_awesome),
+          ),
+        ],
         bottom: total > 0
             ? PreferredSize(
                 preferredSize: const Size.fromHeight(4),
@@ -353,7 +816,7 @@ class _ItemsScreenState extends State<ItemsScreen> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'Додай перший пункт до цього списку',
+                          'Додай перший пункт вручну або натисни ✨ для AI-рекомендацій',
                           textAlign: TextAlign.center,
                           style:
                               Theme.of(context).textTheme.bodyMedium?.copyWith(

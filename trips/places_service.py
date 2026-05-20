@@ -165,3 +165,81 @@ def search_places_for_list(trip, trip_list, max_results=5):
         "query": text_query,
         "items": results,
     }
+
+def resolve_place_id_from_text(title, destination):
+    api_key = os.getenv("GOOGLE_PLACES_API_KEY")
+
+    if not api_key:
+        raise ValueError("GOOGLE_PLACES_API_KEY is not set")
+
+    if not title or not destination:
+        return None
+
+    text_query = f"{title} in {destination}"
+
+    response = requests.post(
+        "https://places.googleapis.com/v1/places:searchText",
+        headers={
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": api_key,
+            "X-Goog-FieldMask": (
+                "places.id,"
+                "places.displayName,"
+                "places.formattedAddress"
+            ),
+        },
+        json={
+            "textQuery": text_query,
+            "maxResultCount": 1,
+            "languageCode": "uk",
+        },
+        timeout=10,
+    )
+
+    if response.status_code != 200:
+        print(
+            "PLACE ID RESOLVE ERROR:",
+            response.status_code,
+            response.text,
+        )
+        return None
+
+    data = response.json()
+    places = data.get("places", [])
+
+    if not places:
+        return None
+
+    return places[0].get("id")
+
+
+def normalize_place_title(title):
+    if not title:
+        return ""
+
+    return (
+        title.lower()
+        .replace("park", "")
+        .replace("парк", "")
+        .replace("villa", "")
+        .replace("вілла", "")
+        .replace("garden", "")
+        .replace("giardino", "")
+        .replace("degli", "")
+        .replace("delle", "")
+        .replace("del", "")
+        .replace(",", "")
+        .replace(".", "")
+        .replace("-", " ")
+        .strip()
+    )
+
+
+def is_similar_place_title(candidate_title, existing_title):
+    candidate = normalize_place_title(candidate_title)
+    existing = normalize_place_title(existing_title)
+
+    if not candidate or not existing:
+        return False
+
+    return existing in candidate or candidate in existing
