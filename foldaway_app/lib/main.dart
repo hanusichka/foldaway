@@ -9,6 +9,9 @@ import 'screens/items_screen.dart';
 import 'theme/app_theme.dart';
 import 'screens/trip_map_screen.dart';
 
+import 'screens/forgot_password_screen.dart';
+import 'screens/reset_password_screen.dart';
+
 void main() {
   runApp(const FoldawayApp());
 }
@@ -17,7 +20,10 @@ final _router = GoRouter(
   routes: [
     GoRoute(
       path: '/',
-      builder: (context, state) => const LoginScreen(),
+      builder: (context, state) => LoginScreen(
+        initialMessage: state.uri.queryParameters['message'],
+        initialEmail: state.uri.queryParameters['email'],
+      ),
     ),
     GoRoute(
       path: '/register',
@@ -47,6 +53,18 @@ final _router = GoRouter(
         listId: state.pathParameters['listId']!,
         listTitle: state.uri.queryParameters['listTitle'] ?? 'Список',
         tripTitle: state.uri.queryParameters['tripTitle'] ?? 'Подорож',
+      ),
+    ),
+    GoRoute(
+      path: '/forgot-password',
+      builder: (context, state) => const ForgotPasswordScreen(),
+    ),
+
+    GoRoute(
+      path: '/reset-password',
+      builder: (context, state) => ResetPasswordScreen(
+        uid: state.uri.queryParameters['uid'] ?? '',
+        token: state.uri.queryParameters['token'] ?? '',
       ),
     ),
   ],

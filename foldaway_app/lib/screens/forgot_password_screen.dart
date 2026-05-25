@@ -1,55 +1,49 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../services/api_service.dart';
-import '../theme/app_theme.dart';
 
-class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({super.key});
 
   @override
-  State<RegisterScreen> createState() => _RegisterScreenState();
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> {
-  final _usernameController = TextEditingController();
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
   final _apiService = ApiService();
 
   bool _isLoading = false;
   String? _error;
+  String? _successMessage;
 
-  Future<void> _register() async {
+  Future<void> _sendResetEmail() async {
     setState(() {
       _isLoading = true;
       _error = null;
+      _successMessage = null;
     });
 
-    final result = await _apiService.register(
-      _usernameController.text,
+    final result = await _apiService.requestPasswordReset(
       _emailController.text,
-      _passwordController.text,
     );
 
     if (!mounted) return;
 
-    setState(() => _isLoading = false);
+    setState(() {
+      _isLoading = false;
 
-    if (result.success) {
-      final message = Uri.encodeComponent(result.message);
-      final email = Uri.encodeComponent(_emailController.text.trim());
-
-      context.go('/?message=$message&email=$email');
-    } else {
-      setState(() => _error = result.message);
-    }
+      if (result.success) {
+        _successMessage = result.message;
+      } else {
+        _error = result.message;
+      }
+    });
   }
 
   @override
   void dispose() {
-    _usernameController.dispose();
     _emailController.dispose();
-    _passwordController.dispose();
     super.dispose();
   }
 
@@ -65,20 +59,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'Реєстрація',
+                'Відновлення пароля',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 32),
-
-              TextField(
-                controller: _usernameController,
-                decoration: const InputDecoration(
-                  labelText: 'Імʼя користувача',
-                  border: OutlineInputBorder(),
-                ),
+              const SizedBox(height: 12),
+              const Text(
+                'Введіть email, і ми надішлемо посилання для створення нового пароля.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 32),
 
               TextField(
                 controller: _emailController,
@@ -87,17 +78,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   labelText: 'Email',
                   border: OutlineInputBorder(),
                 ),
-              ),
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Пароль',
-                  border: OutlineInputBorder(),
-                ),
-                onSubmitted: (_) => _register(),
+                onSubmitted: (_) => _sendResetEmail(),
               ),
 
               if (_error != null) ...[
@@ -105,23 +86,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 Text(_error!, style: const TextStyle(color: Colors.red)),
               ],
 
+              if (_successMessage != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _successMessage!,
+                  style: const TextStyle(color: Colors.green),
+                ),
+              ],
+
               const SizedBox(height: 24),
 
               ElevatedButton(
-                onPressed: _isLoading ? null : _register,
+                onPressed: _isLoading ? null : _sendResetEmail,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
                 child: _isLoading
                     ? const CircularProgressIndicator()
-                    : const Text('Зареєструватись'),
+                    : const Text('Надіслати лист'),
               ),
 
               const SizedBox(height: 12),
 
               TextButton(
                 onPressed: () => context.go('/'),
-                child: const Text('Вже є акаунт? Увійти'),
+                child: const Text('Повернутися до входу'),
               ),
             ],
           ),

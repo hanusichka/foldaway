@@ -7,6 +7,8 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+load_dotenv(BASE_DIR / '.env')
+
 # ✅ SECRET_KEY тепер з .env
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-mv-6uc3_012@m$=!s^(5dejbn8+qtn)ekjlhtic5ua6lb1unav')
 
@@ -108,3 +110,46 @@ SIMPLE_JWT = {
 
 CORS_ALLOW_ALL_ORIGINS = True
 
+# Email verification
+BACKEND_BASE_URL = os.getenv('BACKEND_BASE_URL', 'http://127.0.0.1:8000')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Foldaway <noreply@foldaway.local>')
+
+# Для локальної розробки листи будуть виводитися в термінал.
+# EMAIL_BACKEND = os.getenv(
+#     'EMAIL_BACKEND',
+#     'django.core.mail.backends.console.EmailBackend',
+# )
+
+# EMAIL_HOST = os.getenv('EMAIL_HOST', '')
+# EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+# EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+# EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+# EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+
+# # Email verification
+# BACKEND_BASE_URL = 'http://127.0.0.1:8000'
+# DEFAULT_FROM_EMAIL = 'Foldaway <noreply@foldaway.local>'
+
+# # Локально листи не відправляються реально, а виводяться в термінал Django
+# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# Email verification
+BACKEND_BASE_URL = os.getenv('BACKEND_BASE_URL', 'http://127.0.0.1:8000')
+
+EMAIL_BACKEND = os.getenv(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.console.EmailBackend',
+)
+
+EMAIL_HOST = os.getenv('EMAIL_HOST', '')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+
+DEFAULT_FROM_EMAIL = os.getenv(
+    'DEFAULT_FROM_EMAIL',
+    EMAIL_HOST_USER or 'Foldaway <noreply@foldaway.local>',
+)
+
+FRONTEND_BASE_URL = os.getenv('FRONTEND_BASE_URL', 'http://localhost:8000')

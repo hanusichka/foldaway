@@ -8,6 +8,17 @@ import '../models/trip.dart';
 import '../models/trip_list.dart';
 import '../models/list_item.dart';
 
+class AuthResult {
+  final bool success;
+  final String message;
+
+  const AuthResult({
+    required this.success,
+    required this.message,
+  });
+}
+
+
 class ApiService {
   static const String baseUrl = 'http://127.0.0.1:8000/api';
 
@@ -40,42 +51,216 @@ class ApiService {
   }
 
   // Авторизація
-  Future<bool> login(String username, String password) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/login/'),
-      headers: _headers,
-      body: jsonEncode({
-        'username': username,
-        'password': password,
-      }),
-    );
+  Future<AuthResult> login(String username, String password) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/login/'),
+        headers: _headers,
+        body: jsonEncode({
+          'username': username.trim(),
+          'password': password,
+        }),
+      );
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(utf8.decode(response.bodyBytes));
-      await saveToken(data['access']);
-      return true;
+      final body = utf8.decode(response.bodyBytes);
+      final data = body.isNotEmpty ? jsonDecode(body) : {};
+
+      if (response.statusCode == 200) {
+        await saveToken(data['access']);
+
+        return const AuthResult(
+          success: true,
+          message: 'Вхід виконано успішно.',
+        );
+      }
+
+      return AuthResult(
+        success: false,
+        message: _extractErrorMessage(data, 'Невірне імʼя користувача або пароль.'),
+      );
+    } catch (e) {
+      return const AuthResult(
+        success: false,
+        message: 'Не вдалося підключитися до сервера.',
+      );
     }
-
-    return false;
   }
 
-  Future<bool> register(
+  Future<AuthResult> register(
     String username,
     String email,
     String password,
   ) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/register/'),
+        headers: _headers,
+        body: jsonEncode({
+          'username': username.trim(),
+          'email': email.trim(),
+          'password': password,
+        }),
+      );
+
+      final body = utf8.decode(response.bodyBytes);
+      final data = body.isNotEmpty ? jsonDecode(body) : {};
+
+      if (response.statusCode == 201) {
+        return AuthResult(
+          success: true,
+          message: data['message'] ??
+              'Реєстрація успішна. Перевірте пошту для підтвердження email.',
+        );
+      }
+
+      return AuthResult(
+        success: false,
+        message: _extractErrorMessage(data, 'Помилка реєстрації.'),
+      );
+    } catch (e) {
+      return const AuthResult(
+        success: false,
+        message: 'Не вдалося підключитися до сервера.',
+      );
+    }
+  }
+
+  Future<AuthResult> resendVerificationEmail(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/resend-verification/'),
+        headers: _headers,
+        body: jsonEncode({
+          'email': email.trim(),
+        }),
+      );
+
+      final body = utf8.decode(response.bodyBytes);
+      final data = body.isNotEmpty ? jsonDecode(body) : {};
+
+      if (response.statusCode == 200) {
+        return AuthResult(
+          success: true,
+          message: data['message'] ?? 'Лист підтвердження надіслано повторно.',
+        );
+      }
+
+      return AuthResult(
+        success: false,
+        message: _extractErrorMessage(data, 'Не вдалося надіслати лист повторно.'),
+      );
+    } catch (e) {
+      return const AuthResult(
+        success: false,
+        message: 'Не вдалося підключитися до сервера.',
+      );
+    }
+  }
+
+  String _extractErrorMessage(dynamic data, String fallback) {
+    if (data is Map<String, dynamic>) {
+      if (data['message'] != null) {
+        return data['message'].toString();
+      }
+
+      if (data['error'] != null) {
+        return data['error'].toString();
+      }
+
+      if (data['detail'] != null) {
+        return data['detail'].toString();
+      }
+
+      if (data['non_field_errors'] is List && data['non_field_errors'].isNotEmpty) {
+        return data['non_field_errors'].first.toString();
+      }
+
+      for (final value in data.values) {
+        if (value is List && value.isNotEmpty) {
+          return value.first.toString();
+        }
+
+        if (value is String) {
+          return value;
+        }
+      }
+    }
+
+    return fallback;
+  }
+
+  Future<AuthResult> requestPasswordReset(String email) async {
+  try {
     final response = await http.post(
-      Uri.parse('$baseUrl/auth/register/'),
+      Uri.parse('$baseUrl/auth/password-reset/'),
       headers: _headers,
       body: jsonEncode({
-        'username': username,
-        'email': email,
-        'password': password,
+        'email': email.trim(),
       }),
     );
 
-    return response.statusCode == 201;
+    final body = utf8.decode(response.bodyBytes);
+    final data = body.isNotEmpty ? jsonDecode(body) : {};
+
+    if (response.statusCode == 200) {
+      return AuthResult(
+        success: true,
+        message: data['message'] ??
+            'Якщо акаунт із таким email існує, ми надіслали лист для відновлення пароля.',
+      );
+    }
+
+    return AuthResult(
+      success: false,
+      message: _extractErrorMessage(data, 'Не вдалося надіслати лист.'),
+    );
+  } catch (e) {
+    return const AuthResult(
+      success: false,
+      message: 'Не вдалося підключитися до сервера.',
+    );
   }
+}
+
+Future<AuthResult> confirmPasswordReset({
+  required String uid,
+  required String token,
+  required String newPassword,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/password-reset-confirm/'),
+        headers: _headers,
+        body: jsonEncode({
+          'uid': uid,
+          'token': token,
+          'new_password': newPassword,
+        }),
+      );
+
+      final body = utf8.decode(response.bodyBytes);
+      final data = body.isNotEmpty ? jsonDecode(body) : {};
+
+      if (response.statusCode == 200) {
+        return AuthResult(
+          success: true,
+          message: data['message'] ?? 'Пароль успішно змінено.',
+        );
+      }
+
+      return AuthResult(
+        success: false,
+        message: _extractErrorMessage(data, 'Не вдалося змінити пароль.'),
+      );
+    } catch (e) {
+      return const AuthResult(
+        success: false,
+        message: 'Не вдалося підключитися до сервера.',
+      );
+    }
+  }
+
+
 
   // Подорожі
   Future<List<Trip>> getTrips() async {
