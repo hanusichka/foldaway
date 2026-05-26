@@ -2,7 +2,11 @@ import re
 import html
 import requests
 
+from django.contrib.auth.models import User
+from django.db.models import Q
+
 from rest_framework import viewsets, permissions, status
+from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
@@ -15,7 +19,6 @@ from .places_service import (
 from .models import Trip, List, ListItem
 from .serializers import TripSerializer, ListSerializer, ListItemSerializer
 from .ai_recommendation_service import choose_best_places_with_ai
-#from .ai_recommendation_service import choose_best_place_with_ai
 
 
 def extract_coordinates_from_google_maps_url(url):
@@ -131,15 +134,111 @@ def extract_coordinates_from_google_maps_url(url):
     return None, None
 
 
+def user_has_trip_access(trip, user):
+    return trip.user == user or trip.members.filter(id=user.id).exists()
+
+
 class TripViewSet(viewsets.ModelViewSet):
     serializer_class = TripSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Trip.objects.filter(user=self.request.user)
+        user = self.request.user
+
+        return Trip.objects.filter(
+            Q(user=user) | Q(members=user)
+        ).distinct().order_by('-created_at')
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['post'], url_path='share')
+    def share(self, request, pk=None):
+        trip = self.get_object()
+
+        if trip.user != request.user:
+            return Response(
+                {'error': 'Тільки власник подорожі може надавати доступ.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        email = request.data.get('email', '').strip().lower()
+
+        if not email:
+            return Response(
+                {'error': 'Вкажіть email користувача.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user_to_add = User.objects.filter(email__iexact=email).first()
+
+        if not user_to_add:
+            return Response(
+                {'error': 'Користувача з таким email не знайдено.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if user_to_add == trip.user:
+            return Response(
+                {'error': 'Власник уже має доступ до цієї подорожі.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if trip.members.filter(id=user_to_add.id).exists():
+            return Response(
+                {'message': 'Цей користувач уже має доступ до подорожі.'},
+                status=status.HTTP_200_OK,
+            )
+
+        trip.members.add(user_to_add)
+
+        return Response(
+            {
+                'message': f'Користувачу {user_to_add.email} надано доступ до подорожі.',
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=['post'], url_path='unshare')
+    def unshare(self, request, pk=None):
+        trip = self.get_object()
+
+        if trip.user != request.user:
+            return Response(
+                {'error': 'Тільки власник подорожі може забирати доступ.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        email = request.data.get('email', '').strip().lower()
+
+        if not email:
+            return Response(
+                {'error': 'Вкажіть email користувача.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user_to_remove = User.objects.filter(email__iexact=email).first()
+
+        if not user_to_remove:
+            return Response(
+                {'error': 'Користувача з таким email не знайдено.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if user_to_remove == trip.user:
+            return Response(
+                {'error': 'Не можна забрати доступ у власника подорожі.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        trip.members.remove(user_to_remove)
+
+        return Response(
+            {
+                'message': f'Доступ для {user_to_remove.email} забрано.',
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ListViewSet(viewsets.ModelViewSet):
@@ -147,15 +246,25 @@ class ListViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        queryset = List.objects.filter(trip__user=self.request.user)
+        queryset = List.objects.filter(
+            Q(trip__user=self.request.user) | Q(trip__members=self.request.user)
+        ).distinct()
 
         trip_id = self.request.query_params.get('trip')
+
         if trip_id:
             queryset = queryset.filter(trip_id=trip_id)
 
         return queryset.order_by('position', 'created_at')
 
     def perform_create(self, serializer):
+        trip = serializer.validated_data.get('trip')
+
+        if not user_has_trip_access(trip, self.request.user):
+            raise permissions.PermissionDenied(
+                'У вас немає доступу до цієї подорожі.'
+            )
+
         serializer.save()
 
 
@@ -164,7 +273,10 @@ class ListItemViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        queryset = ListItem.objects.filter(list__trip__user=self.request.user)
+        queryset = ListItem.objects.filter(
+            Q(list__trip__user=self.request.user) |
+            Q(list__trip__members=self.request.user)
+        ).distinct()
 
         list_id = self.request.query_params.get('list')
         trip_id = self.request.query_params.get('trip')
@@ -178,6 +290,13 @@ class ListItemViewSet(viewsets.ModelViewSet):
         return queryset.order_by('position', 'created_at')
 
     def perform_create(self, serializer):
+        trip_list = serializer.validated_data.get('list')
+
+        if not user_has_trip_access(trip_list.trip, self.request.user):
+            raise permissions.PermissionDenied(
+                'У вас немає доступу до цього списку.'
+            )
+
         external_link = self.request.data.get('external_link', '')
         latitude = self.request.data.get('latitude')
         longitude = self.request.data.get('longitude')
@@ -224,6 +343,7 @@ class ListItemViewSet(viewsets.ModelViewSet):
             longitude=longitude,
         )
 
+
 def filter_existing_places_from_candidates(trip, trip_list, candidates):
     existing_items = ListItem.objects.filter(list=trip_list)
 
@@ -265,6 +385,7 @@ def filter_existing_places_from_candidates(trip, trip_list, candidates):
 
     return filtered_candidates
 
+
 class GooglePlacesSuggestionsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -279,8 +400,8 @@ class GooglePlacesSuggestionsView(APIView):
 
         try:
             trip_list = List.objects.get(
-                id=list_id,
-                trip__user=request.user,
+                Q(id=list_id),
+                Q(trip__user=request.user) | Q(trip__members=request.user),
             )
         except List.DoesNotExist:
             return Response(

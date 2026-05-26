@@ -588,4 +588,75 @@ Future<AuthResult> confirmPasswordReset({
     '${response.statusCode} ${utf8.decode(response.bodyBytes)}',
   );
 }
+Future<AuthResult> shareTrip({
+  required String tripId,
+  required String email,
+}) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/trips/$tripId/share/'),
+      headers: await _authHeaders,
+      body: jsonEncode({
+        'email': email.trim(),
+      }),
+    );
+
+    final body = utf8.decode(response.bodyBytes);
+    final data = body.isNotEmpty ? jsonDecode(body) : {};
+
+    if (response.statusCode == 200) {
+      return AuthResult(
+        success: true,
+        message: data['message'] ?? 'Доступ надано.',
+      );
+    }
+
+    return AuthResult(
+      success: false,
+      message: _extractErrorMessage(data, 'Не вдалося надати доступ.'),
+    );
+  } catch (e) {
+    return const AuthResult(
+      success: false,
+      message: 'Не вдалося підключитися до сервера.',
+    );
+  }
 }
+
+Future<AuthResult> unshareTrip({
+  required String tripId,
+  required String email,
+}) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/trips/$tripId/unshare/'),
+      headers: await _authHeaders,
+      body: jsonEncode({
+        'email': email.trim(),
+      }),
+    );
+
+    final body = utf8.decode(response.bodyBytes);
+    final data = body.isNotEmpty ? jsonDecode(body) : {};
+
+    if (response.statusCode == 200) {
+      return AuthResult(
+        success: true,
+        message: data['message'] ?? 'Доступ забрано.',
+      );
+    }
+
+    return AuthResult(
+      success: false,
+      message: _extractErrorMessage(data, 'Не вдалося забрати доступ.'),
+    );
+  } catch (e) {
+    return const AuthResult(
+      success: false,
+      message: 'Не вдалося підключитися до сервера.',
+    );
+  }
+}
+
+}
+

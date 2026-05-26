@@ -139,136 +139,250 @@ class _TripsScreenState extends State<TripsScreen> {
     await _showTripDialog();
   }
 
-Future<void> _showTripDialog({Trip? existingTrip}) async {
-  final titleController = TextEditingController(
-    text: existingTrip?.title ?? '',
-  );
+  Future<void> _showTripDialog({Trip? existingTrip}) async {
+    final titleController = TextEditingController(
+      text: existingTrip?.title ?? '',
+    );
 
-  final destinationController = TextEditingController(
-    text: existingTrip?.destination ?? '',
-  );
+    final destinationController = TextEditingController(
+      text: existingTrip?.destination ?? '',
+    );
 
-  final imageController = TextEditingController(
-    text: existingTrip?.coverImageUrl ?? '',
-  );
+    final imageController = TextEditingController(
+      text: existingTrip?.coverImageUrl ?? '',
+    );
 
-  final bool isEditing = existingTrip != null;
+    final bool isEditing = existingTrip != null;
 
-  await showDialog(
-    context: context,
-    builder: (dialogContext) {
-      return StatefulBuilder(
-        builder: (context, setDialogState) {
-          final previewUrl = imageController.text.trim();
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final previewUrl = imageController.text.trim();
 
-          return AlertDialog(
-            title: Text(isEditing ? 'РЕДАГУВАТИ ПОДОРОЖ' : 'НОВА ПОДОРОЖ'),
-            content: SingleChildScrollView(
-              child: Column(
+            return AlertDialog(
+              title: Text(isEditing ? 'РЕДАГУВАТИ ПОДОРОЖ' : 'НОВА ПОДОРОЖ'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      decoration: const InputDecoration(
+                        labelText: 'Назва',
+                        hintText: 'Наприклад: Рим 2026',
+                      ),
+                      autofocus: true,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: destinationController,
+                      decoration: const InputDecoration(
+                        labelText: 'Країна / місто',
+                        hintText: 'Наприклад: Italy, Rome',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: imageController,
+                      decoration: const InputDecoration(
+                        labelText: 'Фото міста',
+                        hintText: 'Встав прямий URL картинки',
+                      ),
+                      onChanged: (_) {
+                        setDialogState(() {});
+                      },
+                    ),
+                    if (previewUrl.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      _imagePreview(previewUrl),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('СКАСУВАТИ'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final title = titleController.text.trim();
+                    final destination = destinationController.text.trim();
+                    final imageUrl = imageController.text.trim();
+
+                    if (title.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Введи назву подорожі'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    Trip? result;
+
+                    if (isEditing) {
+                      result = await _apiService.updateTrip(
+                        existingTrip.id,
+                        title,
+                        destination,
+                        imageUrl.isEmpty ? null : imageUrl,
+                      );
+                    } else {
+                      result = await _apiService.createTrip(
+                        title,
+                        destination,
+                        imageUrl.isEmpty ? null : imageUrl,
+                      );
+                    }
+
+                    if (!mounted) return;
+
+                    if (result != null) {
+                      Navigator.pop(dialogContext);
+                      await _loadTrips();
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            isEditing
+                                ? 'Не вдалося оновити подорож'
+                                : 'Не вдалося створити подорож',
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  child: Text(isEditing ? 'ЗБЕРЕГТИ' : 'СТВОРИТИ'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    titleController.dispose();
+    destinationController.dispose();
+    imageController.dispose();
+  }
+
+  Future<void> _showShareTripDialog(Trip trip) async {
+    final emailController = TextEditingController();
+
+    String? error;
+    String? success;
+    bool isLoading = false;
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> shareTrip() async {
+              final email = emailController.text.trim();
+
+              if (email.isEmpty) {
+                setDialogState(() {
+                  error = 'Введіть email користувача.';
+                  success = null;
+                });
+                return;
+              }
+
+              setDialogState(() {
+                isLoading = true;
+                error = null;
+                success = null;
+              });
+
+              final result = await _apiService.shareTrip(
+                tripId: trip.id,
+                email: email,
+              );
+
+              if (!mounted) return;
+
+              setDialogState(() {
+                isLoading = false;
+
+                if (result.success) {
+                  success = result.message;
+                  error = null;
+                } else {
+                  error = result.message;
+                  success = null;
+                }
+              });
+
+              if (result.success) {
+                await _loadTrips();
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Поділитися подорожжю'),
+              content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextField(
-                    controller: titleController,
-                    decoration: const InputDecoration(
-                      labelText: 'Назва',
-                      hintText: 'Наприклад: Рим 2026',
-                    ),
-                    autofocus: true,
+                  Text(
+                    'Надати доступ до "${trip.title}" іншому користувачу.',
                   ),
                   const SizedBox(height: 16),
                   TextField(
-                    controller: destinationController,
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
-                      labelText: 'Країна / місто',
-                      hintText: 'Наприклад: Italy, Rome',
+                      labelText: 'Email користувача',
+                      border: OutlineInputBorder(),
                     ),
+                    onSubmitted: (_) => shareTrip(),
                   ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: imageController,
-                    decoration: const InputDecoration(
-                      labelText: 'Фото міста',
-                      hintText: 'Встав прямий URL картинки',
+                  if (error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      error!,
+                      style: const TextStyle(color: Colors.red),
                     ),
-                    onChanged: (_) {
-                      setDialogState(() {});
-                    },
-                  ),
-                  if (previewUrl.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    _imagePreview(previewUrl),
+                  ],
+                  if (success != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      success!,
+                      style: const TextStyle(color: Colors.green),
+                    ),
                   ],
                 ],
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('СКАСУВАТИ'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  final title = titleController.text.trim();
-                  final destination = destinationController.text.trim();
-                  final imageUrl = imageController.text.trim();
+              actions: [
+                TextButton(
+                  onPressed: isLoading ? null : () => Navigator.pop(dialogContext),
+                  child: const Text('ЗАКРИТИ'),
+                ),
+                ElevatedButton(
+                  onPressed: isLoading ? null : shareTrip,
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('НАДАТИ ДОСТУП'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
 
-                  if (title.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Введи назву подорожі'),
-                      ),
-                    );
-                    return;
-                  }
+    emailController.dispose();
+  }
 
-                  Trip? result;
-
-                  if (isEditing) {
-                    result = await _apiService.updateTrip(
-                      existingTrip.id,
-                      title,
-                      destination,
-                      imageUrl.isEmpty ? null : imageUrl,
-                    );
-                  } else {
-                    result = await _apiService.createTrip(
-                      title,
-                      destination,
-                      imageUrl.isEmpty ? null : imageUrl,
-                    );
-                  }
-
-                  if (!mounted) return;
-
-                  if (result != null) {
-                    Navigator.pop(dialogContext);
-                    await _loadTrips();
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          isEditing
-                              ? 'Не вдалося оновити подорож'
-                              : 'Не вдалося створити подорож',
-                        ),
-                      ),
-                    );
-                  }
-                },
-                child: Text(isEditing ? 'ЗБЕРЕГТИ' : 'СТВОРИТИ'),
-              ),
-            ],
-          );
-        },
-      );
-    },
-  );
-
-  titleController.dispose();
-  destinationController.dispose();
-  imageController.dispose();
-}
   Future<void> _deleteTrip(String id) async {
     final success = await _apiService.deleteTrip(id);
 
@@ -382,6 +496,15 @@ Future<void> _showTripDialog({Trip? existingTrip}) async {
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
+                                  IconButton(
+                                    tooltip: 'Поділитися',
+                                    icon: const Icon(
+                                      Icons.person_add_alt_1_outlined,
+                                    ),
+                                    onPressed: () {
+                                      _showShareTripDialog(trip);
+                                    },
+                                  ),
                                   IconButton(
                                     tooltip: 'Редагувати',
                                     icon: const Icon(Icons.edit_outlined),

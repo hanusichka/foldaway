@@ -7,6 +7,11 @@ from django.contrib.auth.models import User
 class Trip(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='trips')
+    members = models.ManyToManyField(
+        User,
+        related_name='shared_trips',
+        blank=True,
+    )
     title = models.CharField(max_length=255)
     destination = models.CharField(max_length=255, blank=True)
     start_date = models.DateField(null=True, blank=True)
